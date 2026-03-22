@@ -13,6 +13,7 @@ set(TEST_LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/utils/synthetic_data.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/cuda_utils.cu
     ${CMAKE_SOURCE_DIR}/src/feature_detection/sift_cuda.cu
+    ${CMAKE_SOURCE_DIR}/src/feature_detection/feature_matching.cu
 )
 
 add_executable(recon3d_tests ${TEST_SOURCES} ${TEST_LIB_SOURCES})
