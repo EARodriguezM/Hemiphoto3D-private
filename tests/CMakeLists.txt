@@ -19,9 +19,9 @@ add_executable(recon3d_tests ${TEST_SOURCES} ${TEST_LIB_SOURCES})
 target_link_libraries(recon3d_tests
     GTest::GTest
     GTest::Main
+    cudasift_lib
     ${OpenCV_LIBS}
     Eigen3::Eigen
-    ${CUDA_LIBRARIES}
 )
 
 # Ensure CUDA runtime is linked

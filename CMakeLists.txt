@@ -17,10 +17,19 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcudafe \"--diag_suppress=esa_on_defa
 # Find dependencies
 include(cmake/FindDependencies.cmake)
 
+# ---- CudaSift (external GPU SIFT library) ----
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(VERBOSE_OUTPUT OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/CudaSift)
+# Propagate define so sift_cuda.cu knows CudaSift is available
+add_compile_definitions(USE_CUDASIFT)
+
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/extern/CudaSift
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
     ${CERES_INCLUDE_DIRS}
@@ -50,6 +59,7 @@ set(RECON_SOURCES
 # Main executable
 add_executable(recon3d ${RECON_SOURCES})
 target_link_libraries(recon3d
+    cudasift_lib
     ${OpenCV_LIBS}
     Eigen3::Eigen
     Ceres::ceres

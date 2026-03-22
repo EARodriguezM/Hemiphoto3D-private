@@ -773,31 +773,132 @@ SIFTFeatures detectSIFT_OpenCV(const ImageData& image, int max_features) {
 }
 
 // ========================================================================
-// Public API — default routes to CUDA
+// detectSIFT_CudaSift — Celebrandil/CudaSift wrapper (fastest GPU path)
+// ========================================================================
+#ifdef USE_CUDASIFT
+#include "cudaSift.h"
+#include "cudaImage.h"
+
+static bool g_cudasift_inited = false;
+
+SIFTFeatures detectSIFT_CudaSift(const ImageData& image, int max_features) {
+    SIFTFeatures result;
+    result.image_id = image.id;
+    result.d_descriptors = nullptr;
+    result.count = 0;
+
+    if (image.gray.empty()) {
+        fprintf(stderr, "Warning: Image %d has no grayscale data.\n", image.id);
+        return result;
+    }
+
+    if (!g_cudasift_inited) {
+        InitCuda(0);
+        g_cudasift_inited = true;
+    }
+
+    const int w = image.width;
+    const int h = image.height;
+
+    // CudaSift expects float32 grayscale in [0, 255] range
+    cv::Mat gray_f;
+    if (image.gray.type() == CV_32F) {
+        // Our pipeline stores grayscale in [0,1]; CudaSift needs [0,255]
+        image.gray.convertTo(gray_f, CV_32F, 255.0);
+    } else {
+        // CV_8U or other integer types → float [0,255]
+        image.gray.convertTo(gray_f, CV_32F);
+    }
+    if (!gray_f.isContinuous()) gray_f = gray_f.clone();
+
+    // Upload to CudaImage
+    CudaImage cuImg;
+    cuImg.Allocate(w, h, iAlignUp(w, 128), false, NULL, (float*)gray_f.data);
+    cuImg.Download();
+
+    // Pre-allocate temp memory for reuse
+    int numOctaves = 5;
+    float *tempMem = AllocSiftTempMemory(w, h, numOctaves, false);
+
+    // Extract SIFT
+    SiftData siftData;
+    int maxPts = (max_features > 0) ? max_features : 8192;
+    InitSiftData(siftData, maxPts, true, true);
+
+    float initBlur = 1.0f;  // match CudaSift demo (assumes no prior blurring)
+    float thresh = 1.0f;   // CudaSift contrast threshold (tuned for synthetic/real images)
+    ExtractSift(siftData, cuImg, numOctaves, initBlur, thresh, 0.0f, false, tempMem);
+
+    // Convert SiftPoint[] → cv::KeyPoint + cv::Mat
+    int n = siftData.numPts;
+    if (max_features > 0 && n > max_features) n = max_features;
+
+    result.keypoints.resize(n);
+    result.descriptors = cv::Mat(n, 128, CV_32F);
+
+    SiftPoint* pts = siftData.h_data;
+    for (int i = 0; i < n; i++) {
+        cv::KeyPoint& kp = result.keypoints[i];
+        kp.pt.x    = pts[i].xpos;
+        kp.pt.y    = pts[i].ypos;
+        kp.size    = pts[i].scale * 2.0f;
+        kp.angle   = pts[i].orientation;
+        kp.response = pts[i].score;
+        kp.octave  = (int)pts[i].subsampling;
+        kp.class_id = -1;
+
+        memcpy(result.descriptors.ptr<float>(i), pts[i].data, 128 * sizeof(float));
+    }
+    result.count = n;
+
+    FreeSiftTempMemory(tempMem);
+    FreeSiftData(siftData);
+    return result;
+}
+
+#else // !USE_CUDASIFT — stub that falls back to custom CUDA
+SIFTFeatures detectSIFT_CudaSift(const ImageData& image, int max_features) {
+    fprintf(stderr, "CudaSift not compiled in, falling back to custom CUDA SIFT.\n");
+    return detectSIFT_CUDA(image, max_features);
+}
+#endif
+
+// ========================================================================
+// Public API — default: CudaSift > custom CUDA > OpenCV
 // ========================================================================
 SIFTFeatures detectSIFT(const ImageData& image, int max_features) {
+#ifdef USE_CUDASIFT
+    return detectSIFT_CudaSift(image, max_features);
+#else
     return detectSIFT_CUDA(image, max_features);
+#endif
 }
 
 std::vector<SIFTFeatures> detectAllFeatures(
     const std::vector<ImageData>& images,
     int max_features, bool verbose)
 {
+    const char* backend =
+#ifdef USE_CUDASIFT
+        "CudaSift";
+#else
+        "CUDA";
+#endif
     std::vector<SIFTFeatures> all;
     all.reserve(images.size());
     for (const auto& img : images) {
         SIFTFeatures feat = detectSIFT(img, max_features);
         if (verbose)
-            printf("  [%02d] %-30s  %d features (CUDA)\n",
-                   img.id, img.filename.c_str(), feat.count);
+            printf("  [%02d] %-30s  %d features (%s)\n",
+                   img.id, img.filename.c_str(), feat.count, backend);
         all.push_back(std::move(feat));
     }
     if (verbose) {
         int total = 0;
         for (const auto& f : all) total += f.count;
-        printf("Total features: %d across %zu images (avg %.0f/image)\n",
+        printf("Total features: %d across %zu images (avg %.0f/image) [%s]\n",
                total, all.size(),
-               all.empty() ? 0.0 : (double)total / all.size());
+               all.empty() ? 0.0 : (double)total / all.size(), backend);
     }
     return all;
 }
