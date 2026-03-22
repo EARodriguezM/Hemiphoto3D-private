@@ -1,0 +1,4 @@
+[submodule "extern/CudaSift"]
+	path = extern/CudaSift
+	url = https://github.com/Celebrandil/CudaSift.git
+	branch = AdaLovelace
