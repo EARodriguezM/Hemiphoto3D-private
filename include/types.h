@@ -147,7 +147,7 @@ struct PipelineConfig {
 
     // Dense reconstruction
     float mvs_resolution = 1.0f;        // downscale factor for MVS
-    int mvs_iterations = 8;
+    int mvs_iterations = 12;
     int mvs_patch_size = 11;
 
     // Meshing
