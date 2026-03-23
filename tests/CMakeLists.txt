@@ -14,6 +14,8 @@ set(TEST_LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/utils/cuda_utils.cu
     ${CMAKE_SOURCE_DIR}/src/feature_detection/sift_cuda.cu
     ${CMAKE_SOURCE_DIR}/src/feature_detection/feature_matching.cu
+    ${CMAKE_SOURCE_DIR}/src/sfm/camera_pose.cpp
+    ${CMAKE_SOURCE_DIR}/src/sfm/bundle_adjust.cpp
 )
 
 add_executable(recon3d_tests ${TEST_SOURCES} ${TEST_LIB_SOURCES})
@@ -23,6 +25,7 @@ target_link_libraries(recon3d_tests
     cudasift_lib
     ${OpenCV_LIBS}
     Eigen3::Eigen
+    Ceres::ceres
 )
 
 # Ensure CUDA runtime is linked
