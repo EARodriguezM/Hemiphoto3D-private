@@ -150,6 +150,13 @@ struct PipelineConfig {
     int mvs_iterations = 12;
     int mvs_patch_size = 11;
 
+    // Dense point cloud fusion
+    float voxel_resolution = 0.0001f;   // voxel size in world units (0.1mm default)
+    float outlier_grid_size = 0.002f;   // outlier removal grid cell size (2mm)
+    int outlier_min_neighbors = 5;      // minimum neighbors to keep a point
+    bool use_tsdf = false;              // Option B: TSDF fusion (requires >= 8GB VRAM)
+    float tsdf_truncation_mult = 5.0f;  // truncation = mult * voxel_size
+
     // Meshing
     int poisson_depth = 10;
     float poisson_screening = 4.0f;

@@ -5,6 +5,7 @@ set(TEST_SOURCES
     test_matching.cpp
     test_sfm.cpp
     test_patchmatch.cpp
+    test_point_cloud.cpp
     test_meshing.cpp
 )
 
@@ -18,6 +19,8 @@ set(TEST_LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/sfm/camera_pose.cpp
     ${CMAKE_SOURCE_DIR}/src/sfm/bundle_adjust.cpp
     ${CMAKE_SOURCE_DIR}/src/dense_recon/patchmatch_mvs.cu
+    ${CMAKE_SOURCE_DIR}/src/dense_recon/point_cloud.cu
+    ${CMAKE_SOURCE_DIR}/src/export/ply_exporter.cpp
 )
 
 add_executable(recon3d_tests ${TEST_SOURCES} ${TEST_LIB_SOURCES})
