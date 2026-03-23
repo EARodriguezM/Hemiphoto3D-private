@@ -1,0 +1,1 @@
+- [step7_subtasks.md](step7_subtasks.md) — PatchMatch MVS (Step 7) broken into 4 sub-tasks with kernel boundaries and status
