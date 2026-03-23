@@ -1451,25 +1451,31 @@ SfMResult runIncrementalSfM(
     disambiguateTurntable(result.cameras, result.points, features, matches, config, init_id_i, verbose);
 
     // After disambiguation, camera poses are forced to exact turntable geometry.
-    // Run point-only BA to refine 3D point positions without touching cameras.
-    if (verbose) printf("SfM: Running point-only BA (cameras fixed)...\n");
-    bundleAdjust(result.cameras, result.points, features, config, true, false, /*fix_all_cameras=*/true);
+    // Iterative point-only BA + progressive filtering to refine 3D points
+    // while preserving the exact turntable camera poses.
+    for (int ba_iter = 0; ba_iter < 3; ba_iter++) {
+        if (verbose) printf("SfM: Point-only BA iteration %d...\n", ba_iter);
+        bundleAdjust(result.cameras, result.points, features, config, true, false, /*fix_all_cameras=*/true);
 
-    // Update point errors
-    updatePointErrors(result.points, result.cameras, features);
+        updatePointErrors(result.points, result.cameras, features);
 
-    // Post-BA cleanup: aggressively filter to keep only well-triangulated points
-    double reproj_threshold = std::min(config.max_reprojection_error, 2.0);
-    size_t before = result.points.size();
-    result.points.erase(
-        std::remove_if(result.points.begin(), result.points.end(), [&](const SparsePoint& sp) {
-            return sp.mean_reprojection_error > reproj_threshold
-                   || sp.track_length < 2;
-        }),
-        result.points.end());
-    if (verbose && result.points.size() < before) {
-        printf("SfM: Final cleanup removed %zu points (remaining: %zu)\n",
-               before - result.points.size(), result.points.size());
+        // Progressive filtering: tighter threshold each iteration
+        double reproj_threshold = (ba_iter == 0) ? 1.5 : (ba_iter == 1) ? 1.0 : 0.75;
+        size_t before = result.points.size();
+        result.points.erase(
+            std::remove_if(result.points.begin(), result.points.end(), [&](const SparsePoint& sp) {
+                return sp.mean_reprojection_error > reproj_threshold
+                       || sp.track_length < 2;
+            }),
+            result.points.end());
+
+        if (verbose && result.points.size() < before) {
+            printf("SfM: BA iter %d: removed %zu points (remaining: %zu, threshold: %.1f px)\n",
+                   ba_iter, before - result.points.size(), result.points.size(), reproj_threshold);
+        }
+
+        // Stop if no points were removed (converged)
+        if (result.points.size() == before) break;
     }
 
     // Phase 3: Scale calibration
