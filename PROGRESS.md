@@ -1,6 +1,6 @@
 # PROGRESS — CUDA 3D Reconstruction Pipeline
 
-Last updated: 2026-03-23 (Step 9 completed)
+Last updated: 2026-03-24 (Step 11 completed)
 
 ---
 
@@ -478,6 +478,61 @@ The synthetic sphere's sinusoidal texture repeats every 90°. Orientation-invari
 
 **Verification gate:** 4/4 criteria pass.
 
+### Step 11 — CLI Interface and Pipeline Orchestrator ✅
+
+**Implemented files:**
+- `src/main.cpp` (~180 lines) — Full CLI argument parser:
+  - All flags from PLAN.md spec: `-i/--input`, `-o/--output`, `--quality`, `--max-image-size`, `--match-ratio`, `--mvs-resolution`, `--mvs-iterations`, `--poisson-depth`, `--smooth-iterations`, `--decimate`, `--export-pointcloud`, `--focal-length`, `--sensor-width`, `--turntable`, `--scale-bar`, `--gpu`, `--gpu-memory`, `--verbose`, `--save-intermediate`, `--log`, `--resume`, `-h/--help`
+  - Quality presets (low/medium/high/ultra) applied via `config.applyPreset()` with explicit override re-application pattern: user overrides tracked in a separate struct, re-applied after preset
+  - `--resume` implies `--save-intermediate`
+  - Validation: required args check, quality preset validation, unknown option error
+
+- `src/pipeline.h` — Pipeline class orchestrating all 8 stages:
+  - Data members for all intermediate results (images, features, matches, SfM, depth maps, cloud, mesh)
+  - 8 private stage methods, 4 logging methods (log/vlog/warn/error), helper methods
+  - `FILE* log_file_` for optional log file output
+
+- `src/pipeline.cu` (~350 lines) — Full pipeline orchestration:
+  - **Timer class**: `std::chrono::high_resolution_clock` with start/stop/elapsed per named stage, summary printout
+  - **8 stages wired end-to-end**: loadImages → detectFeatures → matchFeatures → SfM → MVS → fusion → meshing → export
+  - **Resume logic**: SfM checkpoint via `loadSfMCheckpoint()`, depth maps via `loadDepthMapPFM()`, dense cloud via `loadDensePointCloudPLY()`; features and matches always re-run (no serialization format)
+  - **Error handling per plan spec**: low feature warnings (< 100/image), no-match diagnostics, partial registration warnings, MVS fallback to sparse cloud, PoissonRecon install instructions on empty mesh
+  - **Logging**: printf-style varargs (`va_list`), dual output to stdout + optional log file, verbose-only messages via `vlog()`
+  - **Wall-clock timing**: per-stage timing with summary table at end of run
+  - Preserves existing `PipelineConfig::applyPreset()`, `DensePointCloud::freeGPU()`, `Mesh::is_watertight()` implementations
+
+- `include/types.h` — Added `bool resume = false;` to PipelineConfig
+
+**End-to-end verification run:**
+```
+./recon3d -i data/synthetic/ -o output/sphere.obj --quality medium --verbose --save-intermediate
+```
+
+| Stage | Result | Time |
+|-------|--------|------|
+| Load Images | 36 images, 1280×960 | 0.7s |
+| Feature Detection | 588 avg keypoints/image | 0.5s |
+| Feature Matching | 466 verified pairs, graph connected | 2.2s |
+| SfM | 36/36 cameras registered, ~2800 sparse points | 17.9s |
+| MVS | 36 depth maps generated | 39.1s |
+| Fusion | 12.9M dense points | 3.1s |
+| Meshing | 5.26M vertices, 10.6M faces | 53.9 min |
+| Export | output/sphere.obj (548MB) | 12.1s |
+| **Total** | | **55.5 min** |
+
+Meshing dominated runtime due to 12.9M-point input cloud with Poisson depth 9. Intermediate files saved to `output/intermediate/`.
+
+**Verification gate results:**
+
+| Criterion | Required | Actual | Status |
+|-----------|----------|--------|--------|
+| All 8 stages complete end-to-end | yes | All 8 stages succeeded | ✅ PASS |
+| --verbose prints per-stage timing | yes | Timer summary printed | ✅ PASS |
+| --save-intermediate creates files | yes | SfM JSON+PLY, depth PFMs, dense PLY | ✅ PASS |
+| Output mesh is valid | yes | 5.26M vertices, 10.6M faces | ✅ PASS |
+
+**Verification gate:** 4/4 criteria pass.
+
 ---
 
 ## Current State
@@ -485,7 +540,8 @@ The synthetic sphere's sinusoidal texture repeats every 90°. Orientation-invari
 - Build command: `cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)`
 - CUDA architectures set to `75;80;86;89;90` (CUDA 13.0 dropped compute_60 and compute_70).
 - **65/65 tests passing** as of 2026-03-24.
-- All steps 0–10 complete. Full pipeline from images to exported mesh files is functional.
+- All steps 0–11 complete. Full end-to-end pipeline: CLI → 8 stages → exported mesh.
+- End-to-end run on 36 synthetic images produces a 5.26M vertex mesh in ~55 min.
 
 ---
 
@@ -504,7 +560,7 @@ The synthetic sphere's sinusoidal texture repeats every 90°. Orientation-invari
 | 8    | Point Cloud Fusion (CUDA)          | ✅ Done |
 | 9    | Meshing (Poisson + Marching Cubes) | ✅ Done |
 | 10   | Export (.obj/.stl/.ply)            | ✅ Done |
-| 11   | CLI Orchestrator                   | Pending |
+| 11   | CLI Orchestrator                   | ✅ Done |
 | 12   | Capture Guide                      | Pending |
 | 13   | Integration Tests                  | Pending |
 | 14   | Optimization & Profiling           | Pending |
