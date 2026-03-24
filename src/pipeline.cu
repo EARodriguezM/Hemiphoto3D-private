@@ -1,6 +1,8 @@
 #include "pipeline.h"
 #include "utils/cuda_utils.cuh"
 #include <cstdio>
+#include <unordered_map>
+#include <algorithm>
 
 Pipeline::Pipeline(const PipelineConfig& config) : config_(config) {
 }
@@ -56,6 +58,25 @@ void DensePointCloud::freeGPU() {
 
 // Mesh::is_watertight — check if all edges are shared by exactly 2 faces
 bool Mesh::is_watertight() const {
-    // TODO: implement edge-pair counting
-    return false;
+    if (faces.empty()) return false;
+
+    // Count each edge occurrence. An edge is identified by its sorted vertex pair.
+    std::unordered_map<uint64_t, int> edge_count;
+    auto edgeId = [](int a, int b) -> uint64_t {
+        int lo = std::min(a, b), hi = std::max(a, b);
+        return ((uint64_t)lo << 32) | (uint64_t)hi;
+    };
+
+    for (const auto& f : faces) {
+        int v[3] = {f.x(), f.y(), f.z()};
+        for (int e = 0; e < 3; e++) {
+            edge_count[edgeId(v[e], v[(e + 1) % 3])]++;
+        }
+    }
+
+    // Every edge must appear exactly 2 times (shared by 2 faces)
+    for (const auto& [eid, count] : edge_count) {
+        if (count != 2) return false;
+    }
+    return true;
 }

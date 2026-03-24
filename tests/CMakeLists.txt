@@ -20,7 +20,10 @@ set(TEST_LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/sfm/bundle_adjust.cpp
     ${CMAKE_SOURCE_DIR}/src/dense_recon/patchmatch_mvs.cu
     ${CMAKE_SOURCE_DIR}/src/dense_recon/point_cloud.cu
+    ${CMAKE_SOURCE_DIR}/src/meshing/poisson_recon.cpp
+    ${CMAKE_SOURCE_DIR}/src/meshing/marching_cubes.cu
     ${CMAKE_SOURCE_DIR}/src/export/ply_exporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/pipeline.cu
 )
 
 add_executable(recon3d_tests ${TEST_SOURCES} ${TEST_LIB_SOURCES})
