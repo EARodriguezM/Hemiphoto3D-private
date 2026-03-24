@@ -22,6 +22,8 @@ set(TEST_LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/dense_recon/point_cloud.cu
     ${CMAKE_SOURCE_DIR}/src/meshing/poisson_recon.cpp
     ${CMAKE_SOURCE_DIR}/src/meshing/marching_cubes.cu
+    ${CMAKE_SOURCE_DIR}/src/export/obj_exporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/stl_exporter.cpp
     ${CMAKE_SOURCE_DIR}/src/export/ply_exporter.cpp
     ${CMAKE_SOURCE_DIR}/src/pipeline.cu
 )

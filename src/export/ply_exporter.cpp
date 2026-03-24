@@ -74,6 +74,26 @@ bool exportPLY(const Mesh& mesh, const std::string& path) {
     return true;
 }
 
+// Unified interface
+bool exportMesh(const Mesh& mesh, const std::string& filepath, ExportFormat format) {
+    if (format == ExportFormat::AUTO) {
+        std::string ext = filepath.substr(filepath.find_last_of('.') + 1);
+        if (ext == "obj" || ext == "OBJ") format = ExportFormat::OBJ;
+        else if (ext == "stl" || ext == "STL") format = ExportFormat::STL;
+        else format = ExportFormat::PLY;
+    }
+    switch (format) {
+        case ExportFormat::OBJ: return exportOBJ(mesh, filepath);
+        case ExportFormat::STL: return exportSTL(mesh, filepath);
+        case ExportFormat::PLY: return exportPLY(mesh, filepath);
+        default: return false;
+    }
+}
+
+bool exportPointCloud(const DensePointCloud& cloud, const std::string& filepath) {
+    return exportPointCloudPLY(cloud, filepath);
+}
+
 bool exportPointCloudPLY(const DensePointCloud& cloud, const std::string& path) {
     std::ofstream f(path, std::ios::binary);
     if (!f) {

@@ -15,6 +15,7 @@
 #include <opencv2/core/eigen.hpp>
 
 #include <algorithm>
+#include <fstream>
 #include <cmath>
 #include <filesystem>
 #include <numeric>
@@ -417,4 +418,124 @@ TEST_F(MeshingTest, IsWatertightCorrectness) {
     // Empty mesh
     Mesh empty;
     EXPECT_FALSE(empty.is_watertight()) << "Empty mesh not watertight";
+}
+
+// ============================================================================
+// Export Tests (Step 10)
+// ============================================================================
+
+static Mesh makeSphereTestMesh() {
+    // Generate a sphere mesh via MC for export tests
+    int N = 32;
+    float vs = 2.0f / N;
+    std::vector<float> vol(N * N * N);
+    for (int z = 0; z < N; z++)
+    for (int y = 0; y < N; y++)
+    for (int x = 0; x < N; x++) {
+        float fx = -1.0f + (x + 0.5f) * vs;
+        float fy = -1.0f + (y + 0.5f) * vs;
+        float fz = -1.0f + (z + 0.5f) * vs;
+        vol[z * N * N + y * N + x] = std::sqrt(fx*fx + fy*fy + fz*fz) - 0.8f;
+    }
+    return marchingCubes(vol.data(), N, N, N, 0.0f, vs, -1.0f, -1.0f, -1.0f);
+}
+
+TEST_F(MeshingTest, OBJExportRoundTrip) {
+    Mesh mesh = makeSphereTestMesh();
+    ASSERT_GT(mesh.num_vertices(), 0);
+    ASSERT_GT(mesh.num_faces(), 0);
+
+    // Add colors
+    mesh.colors.resize(mesh.num_vertices(), Eigen::Vector3f(0.5f, 0.3f, 0.1f));
+
+    std::string path = "/tmp/test_export_sphere.obj";
+    ASSERT_TRUE(exportOBJ(mesh, path)) << "OBJ export failed";
+    EXPECT_TRUE(fs::exists(path));
+
+    // Parse back and verify
+    std::ifstream in(path);
+    ASSERT_TRUE(in.is_open());
+    int v_count = 0, f_count = 0;
+    std::string first_face_line;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.size() > 2 && line[0] == 'v' && line[1] == ' ') v_count++;
+        if (line.size() > 2 && line[0] == 'f' && line[1] == ' ') {
+            f_count++;
+            if (first_face_line.empty()) first_face_line = line;
+        }
+    }
+
+    EXPECT_EQ(v_count, mesh.num_vertices()) << "Vertex count mismatch";
+    EXPECT_EQ(f_count, mesh.num_faces()) << "Face count mismatch";
+
+    // Verify 1-indexed: first face should start with "f 1"
+    EXPECT_TRUE(first_face_line.find("f 1") == 0)
+        << "OBJ faces should be 1-indexed, got: " << first_face_line;
+
+    printf("[Test] OBJ round-trip: %d V, %d F, first face: %s\n",
+           v_count, f_count, first_face_line.c_str());
+    std::remove(path.c_str());
+}
+
+TEST_F(MeshingTest, STLExportFileSize) {
+    Mesh mesh = makeSphereTestMesh();
+    ASSERT_GT(mesh.num_faces(), 0);
+
+    std::string path = "/tmp/test_export_sphere.stl";
+    ASSERT_TRUE(exportSTL(mesh, path)) << "STL export failed";
+    EXPECT_TRUE(fs::exists(path));
+
+    size_t expected = 84 + (size_t)mesh.num_faces() * 50;
+    size_t actual = fs::file_size(path);
+    EXPECT_EQ(actual, expected)
+        << "STL file size mismatch: expected " << expected << ", got " << actual;
+
+    printf("[Test] STL export: %d faces, file size %zu (expected %zu)\n",
+           mesh.num_faces(), actual, expected);
+    std::remove(path.c_str());
+}
+
+TEST_F(MeshingTest, PLYExportImportRoundTrip) {
+    Mesh mesh = makeSphereTestMesh();
+    ASSERT_GT(mesh.num_vertices(), 0);
+
+    std::string path = "/tmp/test_export_sphere.ply";
+    ASSERT_TRUE(exportPLY(mesh, path)) << "PLY export failed";
+    EXPECT_TRUE(fs::exists(path));
+
+    // Parse PLY header to verify vertex/face counts
+    std::ifstream in(path, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    std::string line;
+    int ply_verts = 0, ply_faces = 0;
+    while (std::getline(in, line)) {
+        if (line.find("element vertex") == 0)
+            ply_verts = std::stoi(line.substr(15));
+        if (line.find("element face") == 0)
+            ply_faces = std::stoi(line.substr(13));
+        if (line.find("end_header") == 0) break;
+    }
+
+    EXPECT_EQ(ply_verts, mesh.num_vertices()) << "PLY vertex count mismatch";
+    EXPECT_EQ(ply_faces, mesh.num_faces()) << "PLY face count mismatch";
+
+    printf("[Test] PLY round-trip: %d V, %d F\n", ply_verts, ply_faces);
+    std::remove(path.c_str());
+}
+
+TEST_F(MeshingTest, ExportMeshAutoFormat) {
+    Mesh mesh = makeSphereTestMesh();
+    ASSERT_GT(mesh.num_faces(), 0);
+
+    EXPECT_TRUE(exportMesh(mesh, "/tmp/test_auto.obj"));
+    EXPECT_TRUE(fs::exists("/tmp/test_auto.obj"));
+    EXPECT_TRUE(exportMesh(mesh, "/tmp/test_auto.stl"));
+    EXPECT_TRUE(fs::exists("/tmp/test_auto.stl"));
+    EXPECT_TRUE(exportMesh(mesh, "/tmp/test_auto.ply"));
+    EXPECT_TRUE(fs::exists("/tmp/test_auto.ply"));
+
+    std::remove("/tmp/test_auto.obj");
+    std::remove("/tmp/test_auto.stl");
+    std::remove("/tmp/test_auto.ply");
 }
