@@ -124,6 +124,7 @@ struct PipelineConfig {
     std::string pointcloud_path;        // optional .ply export
     std::string log_path;
     bool save_intermediate = false;
+    bool resume = false;
     bool verbose = false;
 
     // Quality preset: "low", "medium", "high", "ultra"
